@@ -3,6 +3,7 @@ EV Charging Demand Prediction - FastAPI Application Entrypoint
 Industry-grade REST API backend with full OpenAPI specification.
 """
 
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -39,16 +40,12 @@ app = FastAPI(
 )
 
 # CORS configuration for local React development and production
+IS_VERCEL = bool(os.environ.get("VERCEL"))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "*"
-    ],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -56,13 +53,25 @@ app.add_middleware(
 # Mount API routes
 app.include_router(api_router)
 
-# Mount static build files if frontend/dist exists
-from pathlib import Path
-from fastapi.staticfiles import StaticFiles
+# Only serve static frontend files when NOT on Vercel
+# (Vercel serves the frontend as a separate static build)
+if not IS_VERCEL:
+    from pathlib import Path
+    from fastapi.staticfiles import StaticFiles
 
-frontend_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
-if frontend_dist.exists():
-    app.mount("/", StaticFiles(directory=str(frontend_dist), html=True), name="frontend")
+    frontend_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+    if frontend_dist.exists():
+        app.mount("/", StaticFiles(directory=str(frontend_dist), html=True), name="frontend")
+    else:
+        @app.get("/", tags=["Root"])
+        def root():
+            return {
+                "project": "EV Charging Demand Prediction Full-Stack ML Platform",
+                "version": "2.0.0",
+                "docs": "/docs",
+                "health": "/api/health",
+                "status": "online"
+            }
 else:
     @app.get("/", tags=["Root"])
     def root():

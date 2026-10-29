@@ -13,7 +13,15 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 import joblib
 
 DATA_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "ev_charging_demand.csv"
-MODEL_PATH = Path(__file__).resolve().parent.parent.parent / "models" / "final_ev_charging_demand_model.pkl"
+
+# Support both /models/ and /model/ directories
+_ROOT = Path(__file__).resolve().parent.parent.parent
+_CANDIDATE_MODEL_PATHS = [
+    _ROOT / "models" / "final_ev_charging_demand_model.pkl",
+    _ROOT / "model" / "final_ev_charging_demand_model.pkl",
+    _ROOT / "final_ev_charging_demand_model.pkl",
+]
+MODEL_PATH = next((p for p in _CANDIDATE_MODEL_PATHS if p.exists()), _CANDIDATE_MODEL_PATHS[0])
 
 
 class AnalyticsService:
@@ -154,9 +162,12 @@ class AnalyticsService:
 
     def _compute_model_info(self, df: pd.DataFrame):
         try:
+            if not MODEL_PATH.exists():
+                print(f"[AnalyticsService] Model file not found at {MODEL_PATH}. Skipping model info.")
+                return
+
             # Recreate test split evaluation accurately
             df_clean = df.drop_duplicates().copy()
-            df_clean["Date"] = pd.to_datetime(df_clean["Date"], errors="coerce")
             numeric_cols = ["Hour", "Temperature", "EV_Arrivals", "Occupancy_Rate", "Rainfall"]
             for col in numeric_cols:
                 df_clean[col] = pd.to_numeric(df_clean[col], errors="coerce").fillna(df_clean[col].median())
@@ -165,10 +176,19 @@ class AnalyticsService:
 
             df_clean = df_clean[(df_clean["Hour"] >= 0) & (df_clean["Hour"] <= 23)]
             df_clean = df_clean[(df_clean["Occupancy_Rate"] >= 0) & (df_clean["Occupancy_Rate"] <= 100)]
-            df_clean = df_clean.dropna(subset=["Date", "Charging_Demand"]).reset_index(drop=True)
+            df_clean = df_clean.dropna(subset=["Charging_Demand"]).reset_index(drop=True)
 
-            df_clean["Day_of_Week"] = df_clean["Date"].dt.dayofweek
-            df_clean["Month"] = df_clean["Date"].dt.month
+            # Date-derived features — handle both Date column and pre-existing columns
+            if "Date" in df_clean.columns:
+                df_clean["Date"] = pd.to_datetime(df_clean["Date"], errors="coerce")
+                df_clean = df_clean.dropna(subset=["Date"])
+                df_clean["Day_of_Week"] = df_clean["Date"].dt.dayofweek
+                df_clean["Month"] = df_clean["Date"].dt.month
+            else:
+                if "Day_of_Week" not in df_clean.columns:
+                    df_clean["Day_of_Week"] = 0
+                if "Month" not in df_clean.columns:
+                    df_clean["Month"] = 6
             df_clean["Is_Weekend"] = (df_clean["Day_of_Week"] >= 5).astype(int)
             df_clean["Time_Period"] = df_clean["Hour"].apply(
                 lambda h: "Morning" if 5 <= h < 12 else ("Afternoon" if 12 <= h < 17 else ("Evening" if 17 <= h < 21 else "Night"))
@@ -189,7 +209,7 @@ class AnalyticsService:
             )
 
             # Evaluate model
-            m = joblib.load(MODEL_PATH)
+            m = joblib.load(str(MODEL_PATH))
             y_pred = m.predict(X_test)
 
             acc = float(accuracy_score(y_test, y_pred))

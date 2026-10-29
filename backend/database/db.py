@@ -10,7 +10,8 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 
-DB_DIR = Path("/tmp") if os.environ.get("VERCEL") else Path(__file__).resolve().parent
+_IS_VERCEL = bool(os.environ.get("VERCEL"))
+DB_DIR = Path("/tmp") if _IS_VERCEL else Path(__file__).resolve().parent
 DB_PATH = DB_DIR / "predictions.db"
 
 
@@ -46,8 +47,6 @@ def init_db():
         conn.commit()
 
 
-# Auto-initialize on module load
-init_db()
 
 
 def save_prediction(input_data: Dict[str, Any], result: Dict[str, Any]) -> int:
