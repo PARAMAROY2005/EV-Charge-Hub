@@ -5,11 +5,12 @@ Easily upgradeable to PostgreSQL via environment variables.
 
 import sqlite3
 import json
+import os
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 
-DB_DIR = Path(__file__).resolve().parent
+DB_DIR = Path("/tmp") if os.environ.get("VERCEL") else Path(__file__).resolve().parent
 DB_PATH = DB_DIR / "predictions.db"
 
 
