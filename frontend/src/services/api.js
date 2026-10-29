@@ -1,8 +1,10 @@
 /**
  * API client service for EV Charging Demand Prediction backend.
+ * In production (Vercel), VITE_API_BASE_URL points to the Render backend.
+ * In development, Vite proxy forwards /api → localhost:8000.
  */
 
-const API_BASE = '/api';
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || '') + '/api';
 
 export async function fetchHealth() {
   const res = await fetch(`${API_BASE}/health`);
